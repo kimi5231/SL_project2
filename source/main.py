@@ -27,13 +27,3 @@ malangie_bot = Malangie()
 
 while(malangie_bot.running):
     pull_update()
-
-
-# url = f'https://lolchess.gg/meta'
-#
-# headers = {
-#     'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-# }
-#
-# r = requests.get(url, headers=headers)
-# r.raise_for_status()
