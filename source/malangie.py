@@ -1,11 +1,14 @@
 import requests
 import json
+import re
 from bs4 import BeautifulSoup
 
 
 class Malangie:
     def __init__(self):
         self.running = True
+        self.last_commend = 'commend'
+        self.p = re.compile(r'[1-9]')
         self.url = 'https://api.telegram.org/bot6766400298:AAHttzF1j9Jjx5dk5g8ptT2guJsCxQy2F70'
         self.page_url = 'https://lolchess.gg/meta'
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -24,13 +27,11 @@ class Malangie:
         self.link = []
         for e in soup.select('[class ^="css-1jardaz"] a'):
             self.link.append(e.text)
-            print(e['href'])
         self.link.pop(0)
 
         self.meta_and_link = dict()
         for i in range(len(self.meta)):
             self.meta_and_link.setdefault(self.meta[i], self.link[i])
-
 
     def check_update(self, u):
         if 'message' in u:
@@ -42,15 +43,25 @@ class Malangie:
             else:
                 print(json.dumps(msg, indent=2, ensure_ascii=False))
 
-
     def check_order(self, text, chat_id):
         if text == '명령어':
-            pass
-        elif text == '메타':
-            send_text = ''
-            for t in self.meta_and_link.keys():
-                send_text += f'{t}\n'
+            self.last_commend = 'commend'
+            send_text = """
+메타: 현 시즌 추천 메타 목록
+종료: 프로그램 종료
+            """
             self.send_message(chat_id, send_text)
+        elif text == '메타':
+            self.last_commend = 'meta'
+            send_text = ''
+            i = 1
+            for t in self.meta_and_link.keys():
+                send_text += f'{i}. {t}\n'
+                i += 1
+            send_text += '\n\n정보를 알고 싶은 메타의 이름을 입력해주세요.'
+            self.send_message(chat_id, send_text)
+        elif self.p.search(text):
+            pass
         elif text == '종료':
             self.running = False
 
