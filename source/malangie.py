@@ -14,6 +14,7 @@ class Malangie:
         self.p = re.compile(r'\d')
         self.url = 'https://api.telegram.org/bot6766400298:AAHttzF1j9Jjx5dk5g8ptT2guJsCxQy2F70'
         self.main_page_url = 'https://lolchess.gg/meta'
+        self.current_page_url = ''
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         self.headers = headers = {'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
         self.get_meta_and_link()
@@ -61,8 +62,10 @@ class Malangie:
         elif text in self.meta_and_link.keys():
             self.process_meta_name_commend(chat_id)
             self.current_page_url = self.meta_and_link[text]
-        elif text == '배치표':
+        elif text == '배치표' and self.current_page_url != '':
             self.process_batch_commend(chat_id)
+        elif text == '증강체' and self.current_page_url != '':
+            self.process_reinforce_commend(chat_id)
         elif self.p.search(text):
             if self.last_commend == 'commend':
                 if text == '1':
@@ -77,7 +80,7 @@ class Malangie:
                 if text == '1':
                     self.process_batch_commend(chat_id)
                 elif text == '2':
-                    pass
+                    self.process_reinforce_commend(chat_id)
             elif self.last_commend == 'batch':
                 self.process_level_commend(chat_id, text)
         elif text == '종료':
@@ -143,6 +146,16 @@ class Malangie:
             self.send_photo(chat_id)
             time.sleep(1)
             self.process_meta_name_commend(chat_id)
+
+    def process_reinforce_commend(self, chat_id):
+        r = requests.get(f'https://lolchess.gg{self.current_page_url}', headers=self.headers)
+        r.raise_for_status()
+
+        soup = BeautifulSoup(r.text, 'lxml')
+        elms = soup.select('[class^="challenger-comment"]')
+        send_text = "\n".join(elms[1].get_text(separator='\n').splitlines())
+        self.send_message(chat_id, send_text)
+        self.process_meta_name_commend(chat_id)
 
     def send_message(self, chat_id, text):
         r = requests.get(f'{self.url}/sendMessage', params={'chat_id': chat_id, 'text': text})
