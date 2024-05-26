@@ -66,6 +66,8 @@ class Malangie:
             self.process_batch_commend(chat_id)
         elif text == '증강체' and self.current_page_url != '':
             self.process_reinforce_commend(chat_id)
+        elif text == '렙업' and self.current_page_url != '':
+            self.process_level_up_commend(chat_id)
         elif self.p.search(text):
             if self.last_commend == 'commend':
                 if text == '1':
@@ -81,6 +83,8 @@ class Malangie:
                     self.process_batch_commend(chat_id)
                 elif text == '2':
                     self.process_reinforce_commend(chat_id)
+                elif text == '3':
+                    self.process_level_up_commend(chat_id)
             elif self.last_commend == 'batch':
                 self.process_level_commend(chat_id, text)
         elif text == '종료':
@@ -154,6 +158,19 @@ class Malangie:
         soup = BeautifulSoup(r.text, 'lxml')
         elms = soup.select('[class^="challenger-comment"]')
         send_text = "\n".join(elms[1].get_text(separator='\n').splitlines())
+        self.send_message(chat_id, send_text)
+        self.process_meta_name_commend(chat_id)
+
+    def process_level_up_commend(self, chat_id):
+        r = requests.get(f'https://lolchess.gg{self.current_page_url}', headers=self.headers)
+        r.raise_for_status()
+
+        soup = BeautifulSoup(r.text, 'lxml')
+        elms = soup.select('[class^="challenger-comment"]')
+        text = elms[0].get_text(separator='\n').splitlines()
+        for i in range(len(text)):
+            if text[i] == '스테이지별 레벨업 추천':
+                send_text = '\n'.join(text[i+1:])
         self.send_message(chat_id, send_text)
         self.process_meta_name_commend(chat_id)
 
