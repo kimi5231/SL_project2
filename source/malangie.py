@@ -17,6 +17,7 @@ class Malangie:
         self.current_page_url = ''
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         self.headers = headers = {'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
+        self.current_champion_list = []
         self.get_meta_and_link()
 
     def get_meta_and_link(self):
@@ -88,10 +89,12 @@ class Malangie:
             self.process_reinforce_commend(chat_id)
         elif text == '렙업' and self.current_page_url != '':
             self.process_level_up_commend(chat_id)
-        elif text == '챔피언':
+        elif text == '챔피언' and self.current_page_url != '':
             self.process_need_champion_commend(chat_id)
         elif text == '주요 아이템' and self.current_page_url != '':
             self.process_main_item_commend(chat_id)
+        elif text in self.current_champion_list and self.current_page_url != '':
+            self.process_champion_name_commend(chat_id, text)
         elif self.p.search(text):
             if self.last_commend == 'commend':
                 if text == '1':
@@ -115,7 +118,7 @@ class Malangie:
                 elif text == '5':
                     self.process_main_item_commend(chat_id)
                 elif text == '6':
-                    self.process_champion_name_commend(chat_id)
+                    self.process_need_champion_name_commend(chat_id)
             elif self.last_commend == 'batch':
                 self.process_level_commend(chat_id, text)
         elif text == '종료':
@@ -225,17 +228,9 @@ class Malangie:
         time.sleep(1)
         screenshot = ImageGrab.grab()
         screenshot.save("screenshot.png")
-        self.send_photo(chat_id)
-        if self.current_champion_list == None:
-            elms = page.locator('[class^="TabNavItem"]').all()
-            elms[5].click()
-            time.sleep(1)
-            elms = page.locator('[class^="css-wgmjlp"]').all()
-            self.current_champion_list = []
-            for e in elms:
-                self.current_champion_list.append(e.text_content())
         browser.close()
         p.stop()
+        self.send_photo(chat_id)
 
         r = requests.get(f'https://lolchess.gg{self.current_page_url}', headers=self.headers)
         r.raise_for_status()
@@ -252,59 +247,42 @@ class Malangie:
         self.send_message(chat_id, send_text)
         self.process_meta_name_commend(chat_id)
 
+    def process_need_champion_name_commend(self, chat_id):
+        send_text = '챔피언의 이름을 입력해주세요.'
+        self.send_message(chat_id, send_text)
+
     def process_champion_name_commend(self, chat_id, champ):
-        if self.current_champion_list == None:
-            p = sync_playwright().start()
-            browser = p.chromium.launch(headless=False).new_context(
-                user_agent=self.user_agent,
-                viewport={'width': 800, 'height': 800}
-            )
-            page = browser.new_page()
-            page.goto(f'https://lolchess.gg{self.current_page_url}')
-            time.sleep(1)
-            elms = page.locator('[class^="TabNavItem"]').all()
-            elms[5].click()
-            time.sleep(1)
-            elms = page.locator('[class^="css-wgmjlp"]').all()
-            send_text = ''
-            self.current_champion_list = []
-            for e in elms:
-                send_text += f'{e.text_content()}\n'
-                self.current_champion_list.append(e.text_content())
-            browser.close()
-            p.stop()
-        if champ in self.current_champion_list:
-            r = requests.get(f'https://lolchess.gg{self.current_page_url}', headers=self.headers)
-            r.raise_for_status()
+        r = requests.get(f'https://lolchess.gg{self.current_page_url}', headers=self.headers)
+        r.raise_for_status()
 
-            soup = BeautifulSoup(r.text, 'lxml')
-            elms = soup.select('[class^="challenger-comment"]')
-            text = elms[0].get_text(separator='\n').splitlines()
-            for i in range(len(text)):
-                p = re.compile(champ)
-                if p.search(text[i]):
-                    break
-                else:
-                    return
+        soup = BeautifulSoup(r.text, 'lxml')
+        elms = soup.select('[class^="challenger-comment"]')
+        text = elms[0].get_text(separator='\n').splitlines()
+        p = re.compile(champ)
+        for i in range(len(text)):
+            if p.search(text[i]):
+                for i in range(len(text)):
+                    if text[i] == '활용 아이템':
+                        start = i + 1
+                    if text[i] == '스테이지별 레벨업 추천':
+                        end = i
 
-            for i in range(len(text)):
-                if text[i] == '활용 아이템':
-                    start = i+1
-                if text[i] == '스테이지별 레벨업 추천':
-                    end = i
+                item_list = text[start:end]
 
-            item_list = text[start:end]
+                for i in range(len(item_list)):
+                    if p.search(item_list[i]):
+                        j = i
+                        while item_list[j] != '대체 아이템':
+                            j += 1
+                        send_text = '\n'.join(item_list[i+3:j])
 
-            for i in range(len(item_list)):
-                p = re.compile(champ)
-                if p.search(item_list[i]):
-                    j = i
-                    while item_list[j] == '주요 아이템':
-                        j += 1
-                    send_text = '\n'.join(item_list[i:j])
+                self.send_message(chat_id, send_text)
+                self.process_meta_name_commend(chat_id)
+                return
 
-            self.send_message(chat_id, send_text)
-            self.process_meta_name_commend(chat_id)
+        send_text = '아이템을 끼지 않는 챔피언입니다.'
+        self.send_message(chat_id, send_text)
+        self.process_meta_name_commend(chat_id)
 
     def send_message(self, chat_id, text):
         r = requests.get(f'{self.url}/sendMessage', params={'chat_id': chat_id, 'text': text})
