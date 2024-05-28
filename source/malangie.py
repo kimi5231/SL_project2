@@ -17,7 +17,6 @@ class Malangie:
         self.current_page_url = ''
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         self.headers = headers = {'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
-        self.current_champion_list = None
         self.get_meta_and_link()
 
     def get_meta_and_link(self):
@@ -39,6 +38,25 @@ class Malangie:
         self.meta_and_link = dict()
         for i in range(len(self.meta)):
             self.meta_and_link.setdefault(self.meta[i], self.link[i])
+
+    def get_champion_list(self):
+        p = sync_playwright().start()
+        browser = p.chromium.launch(headless=False).new_context(
+            user_agent=self.user_agent,
+            viewport={'width': 800, 'height': 800}
+        )
+        page = browser.new_page()
+        page.goto(f'https://lolchess.gg{self.current_page_url}')
+        time.sleep(1)
+        elms = page.locator('[class^="TabNavItem"]').all()
+        elms[5].click()
+        time.sleep(1)
+        elms = page.locator('[class^="css-wgmjlp"]').all()
+        self.current_champion_list = []
+        for e in elms:
+            self.current_champion_list.append(e.text_content())
+        browser.close()
+        p.stop()
 
     def check_update(self, u):
         if 'message' in u:
@@ -63,13 +81,14 @@ class Malangie:
         elif text in self.meta_and_link.keys():
             self.process_meta_name_commend(chat_id)
             self.current_page_url = self.meta_and_link[text]
+            self.get_champion_list()
         elif text == '배치표' and self.current_page_url != '':
             self.process_batch_commend(chat_id)
         elif text == '증강체' and self.current_page_url != '':
             self.process_reinforce_commend(chat_id)
         elif text == '렙업' and self.current_page_url != '':
             self.process_level_up_commend(chat_id)
-        elif text == '챔피언' and self.current_page_url != '':
+        elif text == '챔피언':
             self.process_need_champion_commend(chat_id)
         elif text == '주요 아이템' and self.current_page_url != '':
             self.process_main_item_commend(chat_id)
@@ -82,7 +101,8 @@ class Malangie:
             elif self.last_commend == 'meta':
                 if 0 < int(text) < len(self.meta) + 1:
                     self.process_meta_name_commend(chat_id)
-                    self.current_page_url = self.meta_and_link[self.meta[int(text)-1]]
+                    self.current_page_url = self.meta_and_link[self.meta[int(text) - 1]]
+                    self.get_champion_list()
             elif self.last_commend == 'meta name':
                 if text == '1':
                     self.process_batch_commend(chat_id)
@@ -94,6 +114,8 @@ class Malangie:
                     self.process_need_champion_commend(chat_id)
                 elif text == '5':
                     self.process_main_item_commend(chat_id)
+                elif text == '6':
+                    self.process_champion_name_commend(chat_id)
             elif self.last_commend == 'batch':
                 self.process_level_commend(chat_id, text)
         elif text == '종료':
@@ -111,6 +133,7 @@ class Malangie:
 
     def process_meta_name_commend(self, chat_id):
         self.last_commend = 'meta name'
+
         send_text = """
 1. 배치표: 추천 메타의 레벨별 배치표를 보여줍니다.
 2. 증강체: 추천 메타에 맞는 증강체를 등급별로 보여줍니다.
@@ -183,25 +206,9 @@ class Malangie:
         self.process_meta_name_commend(chat_id)
 
     def process_need_champion_commend(self, chat_id):
-        p = sync_playwright().start()
-        browser = p.chromium.launch(headless=False).new_context(
-            user_agent=self.user_agent,
-            viewport={'width': 800, 'height': 800}
-        )
-        page = browser.new_page()
-        page.goto(f'https://lolchess.gg{self.current_page_url}')
-        time.sleep(1)
-        elms = page.locator('[class^="TabNavItem"]').all()
-        elms[5].click()
-        time.sleep(1)
-        elms = page.locator('[class^="css-wgmjlp"]').all()
         send_text = ''
-        self.current_champion_list = []
-        for e in elms:
-            send_text += f'{e.text_content()}\n'
-            self.current_champion_list.append(e.text_content())
-        browser.close()
-        p.stop()
+        for i in range(len(self.current_champion_list)):
+            send_text += f'{self.current_champion_list[i]}\n'
         self.send_message(chat_id, send_text)
         self.process_meta_name_commend(chat_id)
 
@@ -274,12 +281,30 @@ class Malangie:
             elms = soup.select('[class^="challenger-comment"]')
             text = elms[0].get_text(separator='\n').splitlines()
             for i in range(len(text)):
+                p = re.compile(champ)
+                if p.search(text[i]):
+                    break
+                else:
+                    return
+
+            for i in range(len(text)):
                 if text[i] == '활용 아이템':
                     start = i+1
                 if text[i] == '스테이지별 레벨업 추천':
                     end = i
-            t = '\n'.join(text[start:end])
 
+            item_list = text[start:end]
+
+            for i in range(len(item_list)):
+                p = re.compile(champ)
+                if p.search(item_list[i]):
+                    j = i
+                    while item_list[j] == '주요 아이템':
+                        j += 1
+                    send_text = '\n'.join(item_list[i:j])
+
+            self.send_message(chat_id, send_text)
+            self.process_meta_name_commend(chat_id)
 
     def send_message(self, chat_id, text):
         r = requests.get(f'{self.url}/sendMessage', params={'chat_id': chat_id, 'text': text})
