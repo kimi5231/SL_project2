@@ -25,5 +25,5 @@ def pull_update():
 
 malangie_bot = Malangie()
 
-while(malangie_bot.running):
+while malangie_bot.running:
     pull_update()
